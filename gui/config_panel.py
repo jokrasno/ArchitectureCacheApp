@@ -1,7 +1,4 @@
-"""
-Configuration Panel for Cache Learning Application
-Allows users to configure cache parameters
-"""
+"""Configuration Panel - cache parameter settings"""
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QComboBox, QSpinBox, QPushButton, QGroupBox)
@@ -9,16 +6,13 @@ from PyQt6.QtCore import pyqtSignal
 
 
 class ConfigPanel(QWidget):
-    """Panel for configuring cache parameters"""
-    
-    config_changed = pyqtSignal(dict)  # Emitted when configuration changes
-    
+    config_changed = pyqtSignal(dict)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
-    
+
     def init_ui(self):
-        """Initialize UI components"""
         layout = QVBoxLayout()
         layout.setSpacing(10)
         
@@ -32,7 +26,7 @@ class ConfigPanel(QWidget):
         cache_type_group.setLayout(cache_type_layout)
         layout.addWidget(cache_type_group)
         
-        # Set-Associativity (only shown for set-associative)
+        # Associativity
         self.associativity_group = QGroupBox("Set-Associativity")
         associativity_layout = QVBoxLayout()
         self.associativity_combo = QComboBox()
@@ -85,24 +79,18 @@ class ConfigPanel(QWidget):
         
         layout.addStretch()
         self.setLayout(layout)
-    
+
     def on_cache_type_changed(self, text):
-        """Handle cache type change"""
         self.associativity_group.setVisible(text == "Set-Associative")
-    
+
     def get_config(self) -> dict:
-        """Get current configuration"""
         cache_type = self.cache_type_combo.currentText()
         associativity = 1
         if cache_type == "Set-Associative":
-            associativity_text = self.associativity_combo.currentText()
-            associativity = int(associativity_text.split("-")[0])
+            associativity = int(self.associativity_combo.currentText().split("-")[0])
         
-        block_size_text = self.block_size_combo.currentText()
-        block_size = int(block_size_text.split()[0])
-        
-        write_policy_text = self.write_policy_combo.currentText()
-        write_policy = write_policy_text.lower().replace("-", "-")
+        block_size = int(self.block_size_combo.currentText().split()[0])
+        write_policy = self.write_policy_combo.currentText().lower()
         
         return {
             'cache_type': cache_type,
@@ -111,18 +99,14 @@ class ConfigPanel(QWidget):
             'block_size_words': block_size,
             'write_policy': write_policy
         }
-    
+
     def apply_config(self):
-        """Apply configuration and emit signal"""
-        config = self.get_config()
-        self.config_changed.emit(config)
-    
+        self.config_changed.emit(self.get_config())
+
     def reset_config(self):
-        """Reset to default configuration"""
         self.cache_type_combo.setCurrentIndex(0)
         self.associativity_combo.setCurrentIndex(0)
         self.cache_size_spin.setValue(256)
         self.block_size_combo.setCurrentIndex(0)
         self.write_policy_combo.setCurrentIndex(0)
         self.apply_config()
-
