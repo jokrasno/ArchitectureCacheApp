@@ -12,6 +12,7 @@ class CacheView(QWidget):
         self.highlighted_way = None
         self.tag_bits = 6
         self.num_sets = 256
+        self.associativity = 1
         self.init_ui()
 
     def init_ui(self):
@@ -32,13 +33,14 @@ class CacheView(QWidget):
         layout.addWidget(self.table)
         self.setLayout(layout)
 
-    def update_cache(self, cache_state: dict, associativity: int = 1, 
+    def update_cache(self, cache_state: dict, associativity: int = 1,
                     highlighted_set: int = None, highlighted_way: int = None,
                     is_hit: bool = None, tag_bits: int = 6):
         self.highlighted_set = highlighted_set
         self.highlighted_way = highlighted_way
         self.tag_bits = tag_bits
         self.num_sets = len(cache_state)
+        self.associativity = associativity
         
         if associativity == 1:
             self._update_direct_mapped(cache_state)
@@ -117,41 +119,50 @@ class CacheView(QWidget):
                         if item:
                             item.setBackground(color)
 
-    def get_slot_values(self, slot_idx: int) -> tuple:
+    def _column_offset(self, way_index: int) -> int:
+        """Get the starting column for a given way index"""
+        if self.associativity == 1:
+            return 0
+        return 1 + way_index * 3
+
+    def get_slot_values(self, slot_idx: int, way_index: int = 0) -> tuple:
         """Get the current values in a cache slot as entered by user"""
         display_row = self.num_sets - 1 - slot_idx
-        
-        valid_item = self.table.item(display_row, 0)
-        tag_item = self.table.item(display_row, 1)
-        data_item = self.table.item(display_row, 2)
-        
+        col = self._column_offset(way_index)
+
+        valid_item = self.table.item(display_row, col)
+        tag_item = self.table.item(display_row, col + 1)
+        data_item = self.table.item(display_row, col + 2)
+
         try:
             valid = int(valid_item.text()) if valid_item else 0
-        except:
+        except ValueError:
             valid = 0
-        
+
         try:
             tag = int(tag_item.text(), 2) if tag_item else 0
-        except:
+        except ValueError:
             tag = 0
-        
+
         try:
             data_text = data_item.text() if data_item else "0"
             data = int(data_text.split(",")[0].strip())
-        except:
+        except ValueError:
             data = 0
-        
+
         return valid, tag, data
 
-    def set_slot_values(self, slot_idx: int, valid: int, tag: int, data: int):
+    def set_slot_values(self, slot_idx: int, valid: int, tag: int, data: int,
+                        way_index: int = 0):
         """Set the values in a cache slot (for auto-correction)"""
         display_row = self.num_sets - 1 - slot_idx
-        
-        self.table.item(display_row, 0).setText(str(valid))
-        self.table.item(display_row, 1).setText(f"{tag:0{self.tag_bits}b}")
-        self.table.item(display_row, 2).setText(str(data))
-        
-        for col in range(3):
-            item = self.table.item(display_row, col)
+        col = self._column_offset(way_index)
+
+        self.table.item(display_row, col).setText(str(valid))
+        self.table.item(display_row, col + 1).setText(f"{tag:0{self.tag_bits}b}")
+        self.table.item(display_row, col + 2).setText(str(data))
+
+        for c in range(col, col + 3):
+            item = self.table.item(display_row, c)
             if item:
                 item.setBackground(QColor(144, 238, 144))

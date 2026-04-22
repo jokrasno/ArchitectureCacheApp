@@ -130,20 +130,19 @@ class MainWindow(QMainWindow):
         if not self.memory:
             QMessageBox.warning(self, "Warning", "Please configure cache first.")
             return
-        
-        total_addresses = 65536 // 4
-        percentage = random.uniform(0.5, 1.0)
-        num_addresses = int(total_addresses * percentage)
-        all_addresses = list(range(0, 65536, 4))
-        selected = random.sample(all_addresses, num_addresses)
-        
-        for addr in selected:
-            self.memory.write(addr, random.randint(1, 1000))
-        
+
+        threshold = random.uniform(0.5, 1.0)
+        count = 0
+        for addr in range(0, 65536, 4):
+            if random.random() < threshold:
+                self.memory.memory[addr] = random.randint(1, 1000)
+                self.memory.modified_addresses.add(addr)
+                count += 1
+
         self.generate_procedural_problem()
         self.update_all_displays()
-        QMessageBox.information(self, "Memory Randomized", 
-            f"Populated {num_addresses} addresses ({percentage*100:.1f}%).")
+        QMessageBox.information(self, "Memory Randomized",
+            f"Populated {count} addresses ({count/16384*100:.1f}%).")
 
     def on_clear_memory(self):
         if not self.memory:
@@ -182,112 +181,152 @@ class MainWindow(QMainWindow):
         if not self.exercise_manager:
             self.operation_panel.set_feedback("Please configure cache first.", False)
             return
-        
+
         op = self.exercise_manager.get_current_operation()
         if not op:
             self.operation_panel.set_feedback("No current operation.", False)
             return
-        
+
         is_write = op.operation_type == 'write'
-        
+
         # Get student's form answers
         hit_miss_answer = self.operation_panel.get_hit_miss_answer()
         tag, block_idx, block_off, byte_off = self.operation_panel.get_address_decomposition()
-        
+
         # Get correct values
         correct_tag, correct_bi, correct_bo, correct_byo = \
             self.exercise_manager.get_correct_address_decomposition()
-        
-        # Calculate expected hit/miss from current cache state
+
+        # Calculate expected hit/miss from current cache state (check ALL ways)
         cache_state = self.cache.get_cache_state()
-        slot_entry = cache_state[correct_bi]['ways'][0]
-        expected_hit = slot_entry['valid'] and slot_entry['tag'] == correct_tag
-        
+        ways = cache_state[correct_bi]['ways']
+        expected_hit = False
+        matching_way_index = 0
+        for i, way in enumerate(ways):
+            if way['valid'] and way['tag'] == correct_tag:
+                expected_hit = True
+                matching_way_index = i
+                break
+
+        # For a miss, find the victim way (first invalid, or lowest use_bit)
+        if not expected_hit and self.cache.associativity > 1:
+            victim = self.cache._select_victim_entry(correct_bi)
+            for i, e in enumerate(self.cache.cache[correct_bi]):
+                if e is victim:
+                    matching_way_index = i
+                    break
+
         # Validate form answers
         hit_miss_correct = (hit_miss_answer == expected_hit)
-        decomp_correct = (tag == correct_tag and block_idx == correct_bi and 
+        decomp_correct = (tag == correct_tag and block_idx == correct_bi and
                          block_off == correct_bo and byte_off == correct_byo)
-        
+
         # Get what student entered in cache table
-        student_valid, student_tag, student_data = self.cache_view.get_slot_values(correct_bi)
-        
+        student_valid, student_tag, student_data = self.cache_view.get_slot_values(
+            correct_bi, matching_way_index)
+
         if is_write:
-            # WRITE operation: check memory AND cache
             write_value = op.value
-            
-            # Expected: memory should have the write value
             student_memory_value = self.memory_view.get_value_at_address(op.address)
-            memory_correct = (student_memory_value == write_value)
-            
-            # For write-through: cache updated with write value
-            # Expected cache state after write
-            expected_cache_data = write_value
-            expected_valid = 1
-            expected_cache_tag = correct_tag
-            
-            cache_valid_correct = (student_valid == expected_valid)
-            cache_tag_correct = (student_tag == expected_cache_tag)
-            cache_data_correct = (student_data == expected_cache_data)
-            cache_table_correct = cache_valid_correct and cache_tag_correct and cache_data_correct
-            
+
+            if expected_hit:
+                # Write hit: cache updated with write value
+                expected_cache_data = write_value
+                expected_valid = 1
+                expected_cache_tag = correct_tag
+                cache_valid_correct = (student_valid == expected_valid)
+                cache_tag_correct = (student_tag == expected_cache_tag)
+                cache_data_correct = (student_data == expected_cache_data)
+                cache_table_correct = cache_valid_correct and cache_tag_correct and cache_data_correct
+                memory_correct = (student_memory_value == write_value) if self.cache.write_policy == 'write-through' else True
+            elif self.cache.write_policy == 'write-through':
+                # Write-through miss: no-write-allocate, cache unchanged
+                cache_valid_correct = True
+                cache_tag_correct = True
+                cache_data_correct = True
+                cache_table_correct = True  # Don't check cache
+                expected_cache_data = student_data
+                memory_correct = (student_memory_value == write_value)
+            else:
+                # Write-back miss: write-allocate, cache updated
+                expected_cache_data = write_value
+                expected_valid = 1
+                expected_cache_tag = correct_tag
+                cache_valid_correct = (student_valid == expected_valid)
+                cache_tag_correct = (student_tag == expected_cache_tag)
+                cache_data_correct = (student_data == expected_cache_data)
+                cache_table_correct = cache_valid_correct and cache_tag_correct and cache_data_correct
+                memory_correct = True  # Memory unchanged for write-back
+
             all_correct = hit_miss_correct and decomp_correct and cache_table_correct and memory_correct
-            
+
         else:
             # READ operation: check cache only
             expected_data = self.memory.read(op.address)
             expected_valid = 1
             expected_cache_tag = correct_tag
-            
+
             cache_valid_correct = (student_valid == expected_valid)
             cache_tag_correct = (student_tag == expected_cache_tag)
             cache_data_correct = (student_data == expected_data)
             cache_table_correct = cache_valid_correct and cache_tag_correct and cache_data_correct
-            
-            memory_correct = True  # Not checked for reads
+
+            memory_correct = True
             expected_cache_data = expected_data
-            
+
             all_correct = hit_miss_correct and decomp_correct and cache_table_correct
-        
+
         attempts = self.exercise_manager.get_attempts_for_current() + 1
         self.exercise_manager.attempts_per_question[self.exercise_manager.current_operation_index] = attempts
-        
+
         if all_correct:
             # Update the actual simulators
             self.exercise_manager.execute_current_operation()
-            
+
             self.exercise_manager.mark_current_answered()
             self.exercise_manager.attempts_per_question[self.exercise_manager.current_operation_index] = 0
-            
+
             # Show success pop-up
             op_type = "Write" if is_write else "Read"
-            msg = (f"★ Great job! ★\n\n"
-                   f"{op_type} {'Hit' if expected_hit else 'Miss'}!\n"
-                   f"Cache slot {correct_bi} correctly updated:\n"
-                   f"  Valid = 1\n"
-                   f"  Tag = {correct_tag:0{self.cache.tag_bits}b}\n"
-                   f"  Data = {expected_cache_data}")
-            if is_write:
-                msg += f"\n\nMemory at 0x{op.address:04X} = {op.value}"
-            
+            if is_write and not expected_hit and self.cache.write_policy == 'write-through':
+                msg = (f"Great job!\n\n"
+                       f"{op_type} Miss (no-write-allocate)!\n"
+                       f"Memory at 0x{op.address:04X} = {op.value}\n"
+                       f"Cache unchanged.")
+            else:
+                way_info = f", Way {matching_way_index}" if self.cache.associativity > 1 else ""
+                msg = (f"Great job!\n\n"
+                       f"{op_type} {'Hit' if expected_hit else 'Miss'}!\n"
+                       f"Cache slot {correct_bi}{way_info} correctly updated:\n"
+                       f"  Valid = 1\n"
+                       f"  Tag = {correct_tag:0{self.cache.tag_bits}b}\n"
+                       f"  Data = {expected_cache_data}")
+                if is_write and self.cache.write_policy == 'write-through':
+                    msg += f"\n\nMemory at 0x{op.address:04X} = {op.value}"
+
             QMessageBox.information(self, "Correct!", msg)
-            
-            self.operation_panel.set_feedback("✓ Correct! Moving to next problem...", True)
-            
+
+            self.operation_panel.set_feedback("Correct! Moving to next problem...", True)
+
             self.procedural_count += 1
             self.update_status_message()
             self.generate_procedural_problem()
             self.update_all_displays()
-            
+
         elif attempts >= self.exercise_manager.max_attempts:
             # Auto-correct everything
-            self.cache_view.set_slot_values(correct_bi, 1, correct_tag, expected_cache_data)
-            
-            if is_write:
+            if not (is_write and not expected_hit and self.cache.write_policy == 'write-through'):
+                # Only set cache values if cache should change
+                self.cache_view.set_slot_values(correct_bi, 1, correct_tag,
+                                                expected_cache_data, matching_way_index)
+
+            if is_write and self.cache.write_policy in ('write-through',) or \
+               (is_write and expected_hit):
                 self.memory_view.set_value_at_address(op.address, op.value)
-            
+
             # Update actual simulators
             self.exercise_manager.execute_current_operation()
-            
+
             # Fill in correct form answers
             if expected_hit:
                 self.operation_panel.hit_radio.setChecked(True)
@@ -297,56 +336,59 @@ class MainWindow(QMainWindow):
             self.operation_panel.block_idx_input.setText(f"{correct_bi:0{self.cache.block_index_bits}b}")
             self.operation_panel.block_off_input.setText(f"{correct_bo:0{self.cache.block_offset_bits}b}")
             self.operation_panel.byte_off_input.setText(f"{correct_byo:0{self.cache.byte_offset_bits}b}")
-            
-            feedback_parts = ["✗ Out of attempts. Correct answers filled in:\n"]
+
+            feedback_parts = ["Out of attempts. Correct answers filled in:\n"]
             if not hit_miss_correct:
-                feedback_parts.append(f"  • Hit/Miss: {'Hit' if expected_hit else 'Miss'}")
+                feedback_parts.append(f"  Hit/Miss: {'Hit' if expected_hit else 'Miss'}")
             if not decomp_correct:
-                feedback_parts.append(f"  • Tag: {correct_tag:0{self.cache.tag_bits}b}")
-                feedback_parts.append(f"  • Block Index: {correct_bi}")
+                feedback_parts.append(f"  Tag: {correct_tag:0{self.cache.tag_bits}b}")
+                feedback_parts.append(f"  Block Index: {correct_bi}")
             if not cache_table_correct:
-                feedback_parts.append(f"\nCache slot {correct_bi}:")
-                feedback_parts.append(f"  • Valid = 1")
-                feedback_parts.append(f"  • Tag = {correct_tag:0{self.cache.tag_bits}b}")
-                feedback_parts.append(f"  • Data = {expected_cache_data}")
+                way_info = f", Way {matching_way_index}" if self.cache.associativity > 1 else ""
+                feedback_parts.append(f"\nCache slot {correct_bi}{way_info}:")
+                feedback_parts.append(f"  Valid = 1")
+                feedback_parts.append(f"  Tag = {correct_tag:0{self.cache.tag_bits}b}")
+                feedback_parts.append(f"  Data = {expected_cache_data}")
+            elif is_write and not expected_hit and self.cache.write_policy == 'write-through':
+                feedback_parts.append("\nCache unchanged (no-write-allocate).")
             if is_write and not memory_correct:
                 feedback_parts.append(f"\nMemory at 0x{op.address:04X} = {op.value}")
-            
+
             self.operation_panel.set_feedback("\n".join(feedback_parts), False)
-            
+
             self.exercise_manager.mark_current_answered()
-            
+
             self.procedural_count += 1
             self.update_status_message()
             self.generate_procedural_problem()
             self.update_all_displays()
-            
+
         else:
             # Wrong answer, still have attempts
-            feedback_parts = ["✗ Incorrect. Check:\n"]
-            
+            feedback_parts = ["Incorrect. Check:\n"]
+
             if not hit_miss_correct:
-                feedback_parts.append("  • Hit/Miss answer")
+                feedback_parts.append("  Hit/Miss answer")
             if tag != correct_tag:
-                feedback_parts.append("  • Tag decomposition")
+                feedback_parts.append("  Tag decomposition")
             if block_idx != correct_bi:
-                feedback_parts.append("  • Block Index")
+                feedback_parts.append("  Block Index")
             if byte_off != correct_byo:
-                feedback_parts.append("  • Byte Offset")
-            
+                feedback_parts.append("  Byte Offset")
+
             if not cache_valid_correct:
-                feedback_parts.append(f"  • Cache slot {correct_bi} Valid bit")
+                feedback_parts.append(f"  Cache slot {correct_bi} Valid bit")
             if not cache_tag_correct:
-                feedback_parts.append(f"  • Cache slot {correct_bi} Tag")
+                feedback_parts.append(f"  Cache slot {correct_bi} Tag")
             if not cache_data_correct:
-                feedback_parts.append(f"  • Cache slot {correct_bi} Data")
-            
+                feedback_parts.append(f"  Cache slot {correct_bi} Data")
+
             if is_write and not memory_correct:
-                feedback_parts.append(f"  • Memory value at 0x{op.address:04X}")
-            
+                feedback_parts.append(f"  Memory value at 0x{op.address:04X}")
+
             remaining = self.exercise_manager.max_attempts - attempts
             feedback_parts.append(f"\n{remaining} attempt(s) remaining")
-            
+
             self.operation_panel.set_feedback("\n".join(feedback_parts), False)
 
     def on_next_operation(self):
@@ -413,8 +455,9 @@ class MainWindow(QMainWindow):
         self.cache_view.update_cache(cache_state, self.cache.associativity,
                                      highlighted_set, 0, is_hit, self.cache.tag_bits)
         
-        memory_contents = {addr: self.memory.read(addr) for addr in self.memory.get_all_addresses()}
         recent = {op.address} if op else set()
+        memory_contents = {addr: self.memory.read(addr) for addr in
+                           self.memory.get_relevant_addresses(recent)}
         self.memory_view.update_memory(memory_contents, recent, highlighted_address, is_write)
         
         stats = self.cache.get_statistics()

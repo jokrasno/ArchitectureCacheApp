@@ -46,3 +46,10 @@ class MemorySimulator:
 
     def get_all_addresses(self):
         return sorted(self.memory.keys())
+
+    def get_relevant_addresses(self, additional_addresses=None):
+        """Return non-zero addresses plus any additional addresses of interest."""
+        addresses = {addr for addr, value in self.memory.items() if value != 0}
+        if additional_addresses:
+            addresses.update(additional_addresses)
+        return sorted(addresses)

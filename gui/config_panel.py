@@ -1,7 +1,7 @@
 """Configuration Panel - cache parameter settings"""
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QComboBox, QSpinBox, QPushButton, QGroupBox)
+                             QComboBox, QPushButton, QGroupBox)
 from PyQt6.QtCore import pyqtSignal
 
 
@@ -40,12 +40,11 @@ class ConfigPanel(QWidget):
         cache_size_group = QGroupBox("Cache Size")
         cache_size_layout = QVBoxLayout()
         cache_size_layout.addWidget(QLabel("Number of slots:"))
-        self.cache_size_spin = QSpinBox()
-        self.cache_size_spin.setMinimum(2)
-        self.cache_size_spin.setMaximum(1024)
-        self.cache_size_spin.setValue(256)
-        self.cache_size_spin.setSingleStep(2)
-        cache_size_layout.addWidget(self.cache_size_spin)
+        self.cache_size_combo = QComboBox()
+        self.cache_size_combo.addItems(
+            ["2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"])
+        self.cache_size_combo.setCurrentText("256")
+        cache_size_layout.addWidget(self.cache_size_combo)
         cache_size_group.setLayout(cache_size_layout)
         layout.addWidget(cache_size_group)
         
@@ -95,7 +94,7 @@ class ConfigPanel(QWidget):
         return {
             'cache_type': cache_type,
             'associativity': associativity,
-            'cache_size_slots': self.cache_size_spin.value(),
+            'cache_size_slots': int(self.cache_size_combo.currentText()),
             'block_size_words': block_size,
             'write_policy': write_policy
         }
@@ -106,7 +105,7 @@ class ConfigPanel(QWidget):
     def reset_config(self):
         self.cache_type_combo.setCurrentIndex(0)
         self.associativity_combo.setCurrentIndex(0)
-        self.cache_size_spin.setValue(256)
+        self.cache_size_combo.setCurrentText("256")
         self.block_size_combo.setCurrentIndex(0)
         self.write_policy_combo.setCurrentIndex(0)
         self.apply_config()

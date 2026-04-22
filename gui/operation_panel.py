@@ -141,7 +141,7 @@ class OperationPanel(QWidget):
         self.block_idx_input.clear()
         self.block_off_input.clear()
         self.byte_off_input.clear()
-        self.feedback_text.clear()
+        self.clear_feedback()
 
     def set_go_to_address_callback(self, callback):
         self.go_to_address_button.clicked.connect(lambda: callback(self.current_address))
