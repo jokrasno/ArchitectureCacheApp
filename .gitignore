@@ -1,3 +1,4 @@
 __pycache__/
 .pytest_cache/
 .cursor/
+gui/__pycache__/
