@@ -14,7 +14,13 @@ class ConfigPanel(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(6)
+        layout.setContentsMargins(4, 4, 4, 4)
+
+        # Header
+        header = QLabel("Cache Configuration")
+        header.setStyleSheet("font-weight: bold; font-size: 11pt; color: #2c3e50; padding: 4px 0;")
+        layout.addWidget(header)
         
         # Cache Type
         cache_type_group = QGroupBox("Cache Type")
@@ -27,7 +33,7 @@ class ConfigPanel(QWidget):
         layout.addWidget(cache_type_group)
         
         # Associativity
-        self.associativity_group = QGroupBox("Set-Associativity")
+        self.associativity_group = QGroupBox("Ways (Associativity)")
         associativity_layout = QVBoxLayout()
         self.associativity_combo = QComboBox()
         self.associativity_combo.addItems(["2-way", "4-way", "8-way"])
@@ -36,14 +42,15 @@ class ConfigPanel(QWidget):
         self.associativity_group.setVisible(False)
         layout.addWidget(self.associativity_group)
         
-        # Cache Size
+        # Cache Size - default to 8 slots for beginners
         cache_size_group = QGroupBox("Cache Size")
         cache_size_layout = QVBoxLayout()
-        cache_size_layout.addWidget(QLabel("Number of slots:"))
+        self.cache_size_label = QLabel("Number of slots:")
+        cache_size_layout.addWidget(self.cache_size_label)
         self.cache_size_combo = QComboBox()
         self.cache_size_combo.addItems(
             ["2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"])
-        self.cache_size_combo.setCurrentText("256")
+        self.cache_size_combo.setCurrentText("8")
         cache_size_layout.addWidget(self.cache_size_combo)
         cache_size_group.setLayout(cache_size_layout)
         layout.addWidget(cache_size_group)
@@ -69,8 +76,17 @@ class ConfigPanel(QWidget):
         # Buttons
         button_layout = QHBoxLayout()
         self.apply_button = QPushButton("Apply")
+        self.apply_button.setStyleSheet(
+            "QPushButton { background-color: #3498db; color: white; "
+            "font-weight: bold; padding: 6px 12px; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #2980b9; }"
+        )
         self.apply_button.clicked.connect(self.apply_config)
         self.reset_button = QPushButton("Reset")
+        self.reset_button.setStyleSheet(
+            "QPushButton { background-color: #f5f7fa; color: #2c3e50; "
+            "border: 1px solid #bdc3c7; padding: 6px 12px; border-radius: 4px; }"
+        )
         self.reset_button.clicked.connect(self.reset_config)
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.reset_button)
@@ -105,7 +121,7 @@ class ConfigPanel(QWidget):
     def reset_config(self):
         self.cache_type_combo.setCurrentIndex(0)
         self.associativity_combo.setCurrentIndex(0)
-        self.cache_size_combo.setCurrentText("256")
+        self.cache_size_combo.setCurrentText("8")
         self.block_size_combo.setCurrentIndex(0)
         self.write_policy_combo.setCurrentIndex(0)
         self.apply_config()

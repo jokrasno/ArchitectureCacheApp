@@ -17,17 +17,27 @@ class CacheView(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(4, 4, 4, 4)
         
         title = QLabel("Cache")
-        title.setStyleSheet("font-weight: bold; font-size: 14pt;")
+        title.setStyleSheet("font-weight: bold; font-size: 13pt; color: #2c3e50; padding: 2px 0;")
         layout.addWidget(title)
         
         self.table = QTableWidget()
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(True)
-        self.table.horizontalHeader().setStyleSheet(
-            "QHeaderView::section { background-color: #4a4a4a; color: white; "
-            "padding: 4px; border: 1px solid #6c6c6c; font-weight: bold; }"
+        self.table.setStyleSheet(
+            "QTableWidget { "
+            "  background-color: #ffffff; "
+            "  alternate-background-color: #f6f8fa; "
+            "  color: #1f2933; "
+            "  gridline-color: #d5d8dc; "
+            "  font-size: 10pt; "
+            "} "
+            "QTableWidget::item { color: #1f2933; padding: 3px 6px; }"
+            "QTableWidget::item:alternate { background-color: #f8f9fa; }"
+            "QHeaderView::section { background-color: #5d6d7e; color: white; "
+            "padding: 4px; border: 1px solid #4a5568; font-weight: bold; font-size: 9pt; }"
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
@@ -59,15 +69,18 @@ class CacheView(QWidget):
             
             valid_item = QTableWidgetItem("1" if entry['valid'] else "0")
             valid_item.setFlags(valid_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            valid_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(display_row, 0, valid_item)
             
             tag_item = QTableWidgetItem(f"{entry['tag']:0{self.tag_bits}b}" if entry['valid'] else "0" * self.tag_bits)
             tag_item.setFlags(tag_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            tag_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(display_row, 1, tag_item)
             
             data_str = ", ".join(str(word) for word in entry['data']) if entry['valid'] else "0"
             data_item = QTableWidgetItem(data_str)
             data_item.setFlags(data_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            data_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(display_row, 2, data_item)
             
             if set_idx == self.highlighted_set:
@@ -92,27 +105,36 @@ class CacheView(QWidget):
         
         for set_idx in range(num_sets):
             display_row = num_sets - 1 - set_idx
-            self.table.setItem(display_row, 0, QTableWidgetItem(str(set_idx)))
+            set_item = QTableWidgetItem(str(set_idx))
+            set_item.setFlags(set_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            set_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(display_row, 0, set_item)
             
             col = 1
             for way_idx, way_entry in enumerate(cache_state[set_idx]['ways']):
                 valid_item = QTableWidgetItem("1" if way_entry['valid'] else "0")
                 valid_item.setFlags(valid_item.flags() | Qt.ItemFlag.ItemIsEditable)
+                valid_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(display_row, col, valid_item)
                 col += 1
                 
                 tag_item = QTableWidgetItem(f"{way_entry['tag']:0{self.tag_bits}b}" if way_entry['valid'] else "0" * self.tag_bits)
                 tag_item.setFlags(tag_item.flags() | Qt.ItemFlag.ItemIsEditable)
+                tag_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(display_row, col, tag_item)
                 col += 1
                 
                 data_str = ", ".join(str(word) for word in way_entry['data']) if way_entry['valid'] else "0"
                 data_item = QTableWidgetItem(data_str)
                 data_item.setFlags(data_item.flags() | Qt.ItemFlag.ItemIsEditable)
+                data_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(display_row, col, data_item)
                 col += 1
                 
-                if set_idx == self.highlighted_set and way_idx == self.highlighted_way:
+                # Highlight entire set if way is None, or just the matching way
+                if set_idx == self.highlighted_set and (
+                    way_idx == self.highlighted_way or self.highlighted_way is None
+                ):
                     color = QColor(255, 255, 150)
                     for c in range(col - 3, col):
                         item = self.table.item(display_row, c)

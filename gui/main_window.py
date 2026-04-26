@@ -1,8 +1,9 @@
 """Main Window for Cache Learning Application"""
 
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                              QSplitter, QMessageBox, QLabel)
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 import random
 from gui.config_panel import ConfigPanel
 from gui.cache_view import CacheView
@@ -26,17 +27,73 @@ class MainWindow(QMainWindow):
         self.setup_default_config()
 
     def init_ui(self):
-        self.setWindowTitle("Cache Learning Application")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setWindowTitle("Cache Simulator - Learn Cache Memory")
+        self.setGeometry(80, 80, 1400, 900)
+        self.setFont(QFont("Segoe UI", 9))
+        self.setStyleSheet(
+            "QMainWindow { background-color: #fafafa; }"
+            "QWidget { font-family: 'Segoe UI', 'Arial'; color: #2c3e50; }"
+            "QGroupBox { "
+            "  font-weight: bold; "
+            "  border: 1px solid #bdc3c7; "
+            "  border-radius: 6px; "
+            "  margin-top: 8px; "
+            "  padding-top: 14px; "
+            "  background-color: #ffffff; "
+            "} "
+            "QGroupBox::title { "
+            "  subcontrol-origin: margin; "
+            "  left: 10px; "
+            "  padding: 0 5px; "
+            "  color: #2c3e50; "
+            "} "
+            "QLabel { color: #2c3e50; } "
+            "QLineEdit { "
+            "  padding: 4px 6px; "
+            "  border: 1px solid #bdc3c7; "
+            "  border-radius: 3px; "
+            "  background-color: #ffffff; "
+            "} "
+            "QLineEdit:focus { border: 1px solid #3498db; } "
+            "QComboBox { "
+            "  padding: 4px; "
+            "  border: 1px solid #bdc3c7; "
+            "  border-radius: 3px; "
+            "  background-color: #ffffff; "
+            "  color: #1f2933; "
+            "} "
+            "QComboBox QAbstractItemView { "
+            "  background-color: #ffffff; "
+            "  color: #1f2933; "
+            "  selection-background-color: #d6eaf8; "
+            "} "
+            "QPushButton { "
+            "  background-color: #f5f7fa; "
+            "  color: #2c3e50; "
+            "  border: 1px solid #bdc3c7; "
+            "  padding: 6px 10px; "
+            "  border-radius: 4px; "
+            "} "
+            "QPushButton:hover { background-color: #edf3f8; } "
+            "QPushButton:disabled { color: #95a5a6; background-color: #eef2f5; } "
+        )
         self.create_menu_bar()
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(8, 8, 8, 4)
+        main_layout.setSpacing(4)
         central_widget.setLayout(main_layout)
         
-        self.status_label = QLabel("Procedural Mode - Problem #1")
-        self.status_label.setStyleSheet("background-color: #FE9900; padding: 5px; font-weight: bold;")
+        # Status bar at top
+        self.status_label = QLabel(
+            "Problem #1 - Inspect the operation, then work through each step"
+        )
+        self.status_label.setStyleSheet(
+            "background-color: #2980b9; color: white; padding: 6px 10px; "
+            "font-weight: bold; font-size: 10pt; border-radius: 4px;"
+        )
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.status_label)
         
@@ -53,36 +110,48 @@ class MainWindow(QMainWindow):
         self.operation_panel.reset_exercise.connect(self.on_reset_exercise)
         self.operation_panel.set_go_to_address_callback(self.on_go_to_address)
         
+        # Left panel: Config
         left_widget = QWidget()
         left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.addWidget(self.config_panel)
         left_widget.setLayout(left_layout)
         left_widget.setMaximumWidth(250)
         
+        # Center: Cache + Memory (vertical split)
         center_splitter = QSplitter(Qt.Orientation.Vertical)
         center_splitter.addWidget(self.cache_view)
         center_splitter.addWidget(self.memory_view)
         center_splitter.setSizes([400, 300])
         
+        # Right panel: Operation + Stats
         right_widget = QWidget()
         right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.addWidget(self.operation_panel)
         right_layout.addWidget(self.stats_panel)
         right_widget.setLayout(right_layout)
-        right_widget.setMaximumWidth(400)
+        right_widget.setMaximumWidth(420)
         
+        # Main horizontal splitter
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
         main_splitter.addWidget(left_widget)
         main_splitter.addWidget(center_splitter)
         main_splitter.addWidget(right_widget)
-        main_splitter.setSizes([250, 800, 400])
+        main_splitter.setSizes([250, 750, 400])
         
         content_layout = QHBoxLayout()
         content_layout.addWidget(main_splitter)
-        main_layout.addLayout(content_layout)
+        main_layout.addLayout(content_layout, stretch=1)
 
     def create_menu_bar(self):
         menubar = self.menuBar()
+        menubar.setStyleSheet(
+            "QMenuBar { background-color: #ecf0f1; color: #2c3e50; font-size: 10pt; }"
+            "QMenuBar::item:selected { background-color: #3498db; color: white; }"
+            "QMenu { background-color: #ffffff; color: #2c3e50; }"
+            "QMenu::item:selected { background-color: #3498db; color: white; }"
+        )
         
         file_menu = menubar.addMenu("File")
         file_menu.addAction("Reset Cache", self.on_reset_exercise)
@@ -94,6 +163,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction("Exit", self.close)
         
         help_menu = menubar.addMenu("Help")
+        help_menu.addAction("How to Use", self.on_how_to_use)
         help_menu.addAction("About", self.on_about)
 
     def setup_default_config(self):
@@ -141,8 +211,8 @@ class MainWindow(QMainWindow):
 
         self.generate_procedural_problem()
         self.update_all_displays()
-        QMessageBox.information(self, "Memory Randomized",
-            f"Populated {count} addresses ({count/16384*100:.1f}%).")
+        self.operation_panel.set_feedback(
+            f"Memory randomized - {count} addresses populated.", None)
 
     def on_clear_memory(self):
         if not self.memory:
@@ -174,8 +244,10 @@ class MainWindow(QMainWindow):
         self.update_operation_display()
 
     def update_status_message(self):
-        self.status_label.setText(f"Procedural Mode - Problem #{self.procedural_count + 1}")
-        self.status_label.setStyleSheet("background-color: #FE9900; padding: 5px; font-weight: bold;")
+        self.status_label.setText(
+            f"Problem #{self.procedural_count + 1} - "
+            f"Inspect the operation, then work through each step"
+        )
 
     def on_check_answer(self):
         if not self.exercise_manager:
@@ -191,6 +263,10 @@ class MainWindow(QMainWindow):
 
         # Get student's form answers
         hit_miss_answer = self.operation_panel.get_hit_miss_answer()
+        if hit_miss_answer is None:
+            self.operation_panel.set_feedback("Please select Hit or Miss first.", False)
+            return
+
         tag, block_idx, block_off, byte_off = self.operation_panel.get_address_decomposition()
 
         # Get correct values
@@ -238,7 +314,11 @@ class MainWindow(QMainWindow):
                 cache_tag_correct = (student_tag == expected_cache_tag)
                 cache_data_correct = (student_data == expected_cache_data)
                 cache_table_correct = cache_valid_correct and cache_tag_correct and cache_data_correct
-                memory_correct = (student_memory_value == write_value) if self.cache.write_policy == 'write-through' else True
+                if self.cache.write_policy == 'write-through':
+                    memory_correct = (student_memory_value == write_value)
+                else:
+                    # Write-back: memory unchanged
+                    memory_correct = True
             elif self.cache.write_policy == 'write-through':
                 # Write-through miss: no-write-allocate, cache unchanged
                 cache_valid_correct = True
@@ -320,9 +400,12 @@ class MainWindow(QMainWindow):
                 self.cache_view.set_slot_values(correct_bi, 1, correct_tag,
                                                 expected_cache_data, matching_way_index)
 
-            if is_write and self.cache.write_policy in ('write-through',) or \
-               (is_write and expected_hit):
+            if is_write and self.cache.write_policy == 'write-through':
+                # Write-through always updates memory
                 self.memory_view.set_value_at_address(op.address, op.value)
+            elif is_write and expected_hit and self.cache.write_policy == 'write-back':
+                # Write-back hit: memory stays unchanged (dirty bit set in cache only)
+                pass
 
             # Update actual simulators
             self.exercise_manager.execute_current_operation()
@@ -357,10 +440,6 @@ class MainWindow(QMainWindow):
             self.operation_panel.set_feedback("\n".join(feedback_parts), False)
 
             self.exercise_manager.mark_current_answered()
-
-            self.procedural_count += 1
-            self.update_status_message()
-            self.generate_procedural_problem()
             self.update_all_displays()
 
         else:
@@ -417,8 +496,24 @@ class MainWindow(QMainWindow):
         self.update_status_message()
         self.update_all_displays()
 
+    def on_how_to_use(self):
+        QMessageBox.information(self, "How to Use",
+            "Cache Simulator - Quick Guide\n\n"
+            "1. Configure your cache (left panel) and click Apply.\n"
+            "2. Read the current operation at the top of the right panel.\n"
+            "3. Decide: Hit or Miss? Select your answer.\n"
+            "4. Decompose the address into binary fields.\n"
+            "5. Edit the highlighted cache slot (and memory for writes).\n"
+            "6. Click 'Check Answer' to verify.\n\n"
+            "You get 2 attempts per problem. After that, the correct answer is filled in.\n\n"
+            "Tip: Use File > Randomize Memory to populate interesting values."
+        )
+
     def on_about(self):
-        QMessageBox.about(self, "About", "Cache Learning Application\n\nA tool for learning cache memory concepts.")
+        QMessageBox.about(self, "About",
+            "Cache Simulator\n\n"
+            "A teaching tool for learning cache memory concepts.\n"
+            "Designed for computer architecture students.")
 
     def update_operation_display(self):
         if not self.exercise_manager:
@@ -453,7 +548,7 @@ class MainWindow(QMainWindow):
             is_write = op.operation_type == 'write'
         
         self.cache_view.update_cache(cache_state, self.cache.associativity,
-                                     highlighted_set, 0, is_hit, self.cache.tag_bits)
+                                     highlighted_set, None, is_hit, self.cache.tag_bits)
         
         recent = {op.address} if op else set()
         memory_contents = {addr: self.memory.read(addr) for addr in

@@ -22,6 +22,7 @@ from gui.main_window import MainWindow
 from gui.cache_view import CacheView
 from gui.operation_panel import OperationPanel
 from gui.memory_view import MemoryView
+from gui.config_panel import ConfigPanel
 from cache_simulator import CacheSimulator
 from memory_simulator import MemorySimulator
 from exercise_manager import ExerciseManager, ExerciseOperation
@@ -344,6 +345,32 @@ class TestAttempts:
         # After max attempts, auto-correct triggers and marks as answered
         assert w.exercise_manager.is_current_answered()
 
+    def test_autocorrect_keeps_feedback_visible_until_next(self, window):
+        w = window
+        inject_operation(w, 'read', 0x0000)
+        tag, bi, bo, byo = w.cache.calculate_address_components(0x0000)
+
+        fill_answers(w, hit=True,
+                     tag=fmtb(tag, w.cache.tag_bits),
+                     block_idx=fmtb(bi, w.cache.block_index_bits),
+                     block_off=fmtb(bo, w.cache.block_offset_bits),
+                     byte_off=fmtb(byo, w.cache.byte_offset_bits))
+        fill_cache_slot(w, bi, 1, tag, 99)
+        w.on_check_answer()
+
+        fill_answers(w, hit=False,
+                     tag='1' * w.cache.tag_bits,
+                     block_idx=fmtb(bi, w.cache.block_index_bits),
+                     block_off=fmtb(bo, w.cache.block_offset_bits),
+                     byte_off=fmtb(byo, w.cache.byte_offset_bits))
+        fill_cache_slot(w, bi, 1, tag, 99)
+        w.on_check_answer()
+
+        feedback = w.operation_panel.feedback_text.toPlainText()
+        assert w.exercise_manager.is_current_answered()
+        assert "Out of attempts" in feedback
+        assert w.procedural_count == 0
+
 
 # ===========================================================================
 # Set-associative integration
@@ -520,3 +547,171 @@ class TestViewHelpers:
         mv.update_memory({0x0000: 42}, set(), None, False)
         mv.set_value_at_address(0x0000, 99)
         assert mv.get_value_at_address(0x0000) == 99
+
+
+# ===========================================================================
+# Bug-fix regression tests
+# ===========================================================================
+
+class TestBugFixHitMissUnanswered:
+    """Bug: get_hit_miss_answer returned False when neither radio selected,
+       silently treating unanswered as Miss."""
+
+    def test_hit_miss_none_when_unselected(self, qapp):
+        """get_hit_miss_answer returns None when neither radio is selected."""
+        op = OperationPanel()
+        op.hit_radio.setChecked(False)
+        op.miss_radio.setChecked(False)
+        assert op.get_hit_miss_answer() is None
+
+    def test_hit_miss_true(self, qapp):
+        op = OperationPanel()
+        op.hit_radio.setChecked(True)
+        assert op.get_hit_miss_answer() is True
+
+    def test_hit_miss_false(self, qapp):
+        op = OperationPanel()
+        op.miss_radio.setChecked(True)
+        assert op.get_hit_miss_answer() is False
+
+    def test_update_operation_clears_previous_hit_miss_choice(self, qapp):
+        """A new problem should not inherit the previous Hit/Miss choice."""
+        op = OperationPanel()
+        op.hit_radio.setChecked(True)
+        op.tag_input.setText("101")
+
+        op.update_operation('read', 0x0100)
+
+        assert op.get_hit_miss_answer() is None
+        assert op.tag_input.text() == ""
+
+    def test_check_answer_rejects_unselected(self, window):
+        """Checking with no Hit/Miss selected gives a feedback message, not a
+        silent false."""
+        w = window
+        inject_operation(w, 'read', 0x0000)
+        # Deliberately don't select hit or miss
+        w.operation_panel.hit_radio.setChecked(False)
+        w.operation_panel.miss_radio.setChecked(False)
+        w.on_check_answer()
+        feedback = w.operation_panel.feedback_text.toPlainText()
+        assert "select" in feedback.lower() or "hit or miss" in feedback.lower()
+        assert not w.exercise_manager.is_current_answered()
+
+
+class TestBugFixWriteBackAutocorrectMemory:
+    """Bug: autocorrect for write-back write hits visually updated memory
+       even though write-back should keep memory unchanged until eviction."""
+
+    def test_wb_hit_autocorrect_keeps_memory_unchanged(self, qapp):
+        """After autocorrect on a write-back hit, memory should still be 0."""
+        w = MainWindow()
+        config = {
+            'cache_type': 'Direct-Mapped',
+            'associativity': 1,
+            'cache_size_slots': 256,
+            'block_size_words': 1,
+            'write_policy': 'write-back',
+        }
+        w.on_config_changed(config)
+        w.memory.write(0x0000, 10)
+        w.cache.read(0x0000)  # load into cache
+        w.update_all_displays()
+
+        op = inject_operation(w, 'write', 0x0000, 55)
+        tag, bi, bo, byo = w.cache.calculate_address_components(0x0000)
+
+        # First wrong attempt
+        fill_answers(w, hit=True,
+                     tag=fmtb(tag, w.cache.tag_bits),
+                     block_idx=fmtb(bi, w.cache.block_index_bits),
+                     block_off=fmtb(bo, w.cache.block_offset_bits),
+                     byte_off=fmtb(byo, w.cache.byte_offset_bits))
+        fill_cache_slot(w, bi, 1, tag, 999)  # wrong data
+        w.on_check_answer()
+
+        # Second wrong attempt triggers autocorrect
+        fill_answers(w, hit=True,
+                     tag=fmtb(tag, w.cache.tag_bits),
+                     block_idx=fmtb(bi, w.cache.block_index_bits),
+                     block_off=fmtb(bo, w.cache.block_offset_bits),
+                     byte_off=fmtb(byo, w.cache.byte_offset_bits))
+        fill_cache_slot(w, bi, 1, tag, 999)  # still wrong
+        w.on_check_answer()
+
+        # Memory should remain unchanged (write-back hit)
+        assert w.memory.read(0x0000) == 10
+
+
+class TestBugFixSetAssociativeHighlight:
+    """Bug: update_all_displays always passed highlighted_way=0 in
+       set-associative mode, visually steering students to Way 0."""
+
+    def test_set_associative_highlights_all_ways(self, qapp):
+        """When no specific way is known, the entire set should be highlighted."""
+        cv = CacheView()
+        cv.associativity = 2
+        cv.num_sets = 2
+        cv.tag_bits = 6
+        cv.highlighted_set = 0
+        cv.highlighted_way = None  # No specific way known
+
+        # Simulate a 2-way table
+        num_cols = 1 + 2 * 3  # Set + V0,Tag0,Data0 + V1,Tag1,Data1
+        cv.table.setRowCount(2)
+        cv.table.setColumnCount(num_cols)
+        from PyQt6.QtWidgets import QTableWidgetItem
+        for row in range(2):
+            for col in range(num_cols):
+                cv.table.setItem(row, col, QTableWidgetItem("0"))
+
+        cv._update_set_associative(
+            {0: {'ways': [{'valid': False, 'tag': 0, 'data': [0]},
+                          {'valid': False, 'tag': 0, 'data': [0]}]},
+             1: {'ways': [{'valid': False, 'tag': 0, 'data': [0]},
+                          {'valid': False, 'tag': 0, 'data': [0]}]}},
+            2
+        )
+
+        # Both ways of set 0 should be highlighted (columns 1-6)
+        from PyQt6.QtGui import QColor
+        display_row = 1  # set 0 is at the bottom row (num_sets - 1 - 0 = 1)
+        for col in range(1, 7):  # all way columns
+            item = cv.table.item(display_row, col)
+            assert item is not None
+            bg = item.background()
+            assert bg.color() == QColor(255, 255, 150)
+
+        # Set 1 (row 0) should NOT be highlighted
+        item_s1 = cv.table.item(0, 1)
+        assert item_s1 is not None
+        assert item_s1.background().color() != QColor(255, 255, 150)
+
+
+class TestBugFixStatsDisplay:
+    """Bug: Stats showed 'Operation: N / 0' in procedural mode."""
+
+    def test_procedural_stats_shows_problem_number(self, window):
+        w = window
+        w.stats_panel.update_stats(0, 0, 5, 0)
+        text = w.stats_panel.operation_label.text()
+        assert "Problem" in text
+        assert "#5" in text
+        # Should NOT contain "/ 0"
+        assert "/ 0" not in text
+
+    def test_exercise_stats_shows_operation_fraction(self, window):
+        w = window
+        w.stats_panel.update_stats(1, 2, 3, 10)
+        text = w.stats_panel.operation_label.text()
+        assert "3 / 10" in text
+
+
+class TestBugFixDefaultConfig:
+    """Bug: default cache size was 256 - overwhelming for beginners."""
+
+    def test_default_cache_size_is_small(self, qapp):
+        """Config panel should default to a small, beginner-friendly cache."""
+        cp = ConfigPanel()
+        size = cp.cache_size_combo.currentText()
+        assert int(size) <= 16, f"Default cache size should be <= 16, got {size}"

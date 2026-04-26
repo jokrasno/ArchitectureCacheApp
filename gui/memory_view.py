@@ -16,15 +16,29 @@ class MemoryView(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(4, 4, 4, 4)
         
         title = QLabel("Main Memory")
-        title.setStyleSheet("font-weight: bold; font-size: 14pt;")
+        title.setStyleSheet("font-weight: bold; font-size: 13pt; color: #2c3e50; padding: 2px 0;")
         layout.addWidget(title)
         
         self.table = QTableWidget()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Address", "Value"])
         self.table.setAlternatingRowColors(True)
+        self.table.setStyleSheet(
+            "QTableWidget { "
+            "  background-color: #ffffff; "
+            "  alternate-background-color: #f6f8fa; "
+            "  color: #1f2933; "
+            "  gridline-color: #d5d8dc; "
+            "  font-size: 10pt; "
+            "} "
+            "QTableWidget::item { color: #1f2933; padding: 3px 6px; }"
+            "QTableWidget::item:alternate { background-color: #f8f9fa; }"
+            "QHeaderView::section { background-color: #5d6d7e; color: white; "
+            "padding: 4px; border: 1px solid #4a5568; font-weight: bold; font-size: 9pt; }"
+        )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
         self.setLayout(layout)
@@ -48,10 +62,12 @@ class MemoryView(QWidget):
         for row, addr in enumerate(sorted_addresses):
             addr_item = QTableWidgetItem(f"0x{addr:04X}")
             addr_item.setFlags(addr_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            addr_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row, 0, addr_item)
             
             value = self.memory_contents.get(addr, 0)
             value_item = QTableWidgetItem(str(value))
+            value_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             
             # Make value editable for write operations on the highlighted address
             if addr == self.highlighted_address and self.is_write_operation:

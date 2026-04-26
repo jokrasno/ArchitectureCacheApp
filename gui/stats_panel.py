@@ -11,15 +11,21 @@ class StatsPanel(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(6)
+        layout.setContentsMargins(4, 4, 4, 4)
         
         stats_group = QGroupBox("Statistics")
         stats_layout = QVBoxLayout()
+        stats_layout.setSpacing(4)
         
         self.hits_label = QLabel("Hits: 0")
+        self.hits_label.setStyleSheet("font-size: 10pt; color: #27ae60;")
         self.misses_label = QLabel("Misses: 0")
+        self.misses_label.setStyleSheet("font-size: 10pt; color: #c0392b;")
         self.hit_rate_label = QLabel("Hit Rate: 0.0%")
-        self.operation_label = QLabel("Operation: 0 / 0")
+        self.hit_rate_label.setStyleSheet("font-size: 10pt; font-weight: bold;")
+        self.operation_label = QLabel("Problem: #1")
+        self.operation_label.setStyleSheet("font-size: 10pt; color: #2c3e50;")
         
         stats_layout.addWidget(self.hits_label)
         stats_layout.addWidget(self.misses_label)
@@ -38,4 +44,7 @@ class StatsPanel(QWidget):
         total = hits + misses
         hit_rate = (hits / total * 100) if total > 0 else 0.0
         self.hit_rate_label.setText(f"Hit Rate: {hit_rate:.1f}%")
-        self.operation_label.setText(f"Operation: {current_op} / {total_ops}")
+        if total_ops > 0:
+            self.operation_label.setText(f"Operation: {current_op} / {total_ops}")
+        else:
+            self.operation_label.setText(f"Problem: #{current_op}")
